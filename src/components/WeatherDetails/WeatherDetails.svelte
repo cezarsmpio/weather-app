@@ -3,9 +3,16 @@
 
   export let temperature: number;
   export let name: string;
-  export let time: string;
+  export let time: Date;
   export let icon: string;
   export let description: string;
+
+  const formatter = new Intl.DateTimeFormat(undefined, {
+    dateStyle: "long",
+    timeStyle: "short",
+  });
+
+  $: date = formatter.format(time);
 </script>
 
 <section class="details">
@@ -18,12 +25,7 @@
   <div>
     <h2 class="details__city">{name}</h2>
     <p class="details__date">
-      <strong
-        >{new Intl.DateTimeFormat(undefined, {
-          dateStyle: "long",
-          timeStyle: "short",
-        }).format(new Date(time))}</strong
-      >
+      <strong>{date}</strong>
     </p>
   </div>
 
@@ -45,6 +47,7 @@
     align-items: center;
     column-gap: 44px;
     padding: 60px;
+    height: 100vh;
   }
 
   .details__title {
@@ -70,6 +73,7 @@
   @media screen and (max-width: 1024px) {
     .details {
       padding: 40px;
+      height: auto;
       min-height: 70vh;
       align-content: center;
       justify-content: center;

@@ -1,8 +1,8 @@
 export const debounce = (fn, delay = 300) => {
   let timeout;
 
-  return () => {
+  return (...params) => {
     clearTimeout(timeout);
-    timeout = setTimeout(fn, delay);
+    timeout = setTimeout(() => fn(...params), delay);
   };
 };

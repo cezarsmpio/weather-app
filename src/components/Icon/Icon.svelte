@@ -2,16 +2,14 @@
   export let color: string = "#fff";
   export let name: string;
   export let size: number = 60;
-
-  let Icon;
-
-  $: if (name) {
-    import(`../../assets/icons/${name}.svg`).then((component) => {
-      Icon = component.default;
-    });
-  }
 </script>
 
-<span class="icon" style={`fill: ${color}`}>
-  <svelte:component this={Icon} width={size} height={size} />
+<span
+  class="icon"
+  style={`fill: ${color}`}
+  data-testid={`icon-${name}-${size}`}
+>
+  {#await import(`../../assets/icons/${name}.svg`) then component}
+    <svelte:component this={component.default} width={size} height={size} />
+  {/await}
 </span>

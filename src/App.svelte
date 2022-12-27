@@ -1,29 +1,106 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import Icon from "./components/Icon/Icon.svelte";
   import LoadingIcon from "./components/LoadingIcon/LoadingIcon.svelte";
+  import Sidebar from "./components/Sidebar/Sidebar.svelte";
   import WeatherDetails from "./components/WeatherDetails/WeatherDetails.svelte";
   import type {
     City,
+    Forecast,
+    LocalWeather,
     OpenWeather,
     TimePeriod,
-    WeatherMediaDetails,
   } from "./types";
   import { combine, getRandomItem } from "./utils/array";
-  import { formatDate } from "./utils/date";
+  import { getAddressFor, getGeocodingFor, getWeatherFor } from "./utils/data";
   import { debounce } from "./utils/debounce";
   import { getTimePeriod, getWeatherMediaDetailsFrom } from "./utils/details";
+  import { getCurrentPosition } from "./utils/location";
+  import { setQueryParams } from "./utils/url";
 
   let isSearchingForecast = false;
   let query = "";
-  let cities = [];
+  let cities: City[] = [];
   let place: City;
   let data: OpenWeather;
-  let details: WeatherMediaDetails;
-  let forecast: Record<string, any>[];
+  let forecast: Forecast[] = [];
   let time: Date;
   let period: TimePeriod;
-  let gaveAccessToGeolocation: boolean = null;
+  let hasAccessToGeolocation: boolean = null;
+  let currentWeather: LocalWeather;
+  let isGettingCurrentLocation: boolean = false;
+
+  onMount(async () => {
+    const queryParams = new URLSearchParams(window.location.search);
+    let latitude = queryParams.get("latitude");
+    let longitude = queryParams.get("longitude");
+
+    if (latitude && longitude) {
+      const { address } = await getAddressFor(+latitude, +longitude);
+
+      hasAccessToGeolocation = true;
+
+      searchWeatherFor({
+        latitude: +latitude,
+        longitude: +longitude,
+        name: address.city ?? address.town ?? address.state,
+      });
+    } else {
+      setPositionFromCurrent();
+    }
+  });
+
+  const setPositionFromCurrent = async () => {
+    isGettingCurrentLocation = true;
+
+    try {
+      const { coords } = await getCurrentPosition();
+
+      const { latitude, longitude } = coords;
+      const { address } = await getAddressFor(latitude, longitude);
+
+      hasAccessToGeolocation = true;
+
+      searchWeatherFor({
+        latitude,
+        longitude,
+        name: address.city ?? address.town ?? address.state,
+      });
+    } catch {
+      // TODO: Notify the user
+
+      hasAccessToGeolocation = false;
+    } finally {
+      isGettingCurrentLocation = false;
+    }
+  };
+
+  const searchWeatherFor = async (city: City) => {
+    try {
+      isSearchingForecast = true;
+      place = city;
+      query = "";
+      cities = [];
+
+      data = await getWeatherFor(city);
+    } catch {
+      // TODO: Notify the user
+    } finally {
+      isSearchingForecast = false;
+    }
+  };
+
+  const handleOnChangeQuery = async (query) => {
+    if (!query) return;
+
+    try {
+      const { results } = await getGeocodingFor(query);
+
+      cities = results ?? [];
+    } catch {
+      // TODO: Notify the user
+    }
+  };
+  const debouncedHandleOnChangeQuery = debounce(handleOnChangeQuery);
 
   $: if (data) {
     time = new Date(data.current_weather.time);
@@ -34,69 +111,33 @@
     period = getTimePeriod(time);
   }
 
-  $: if (data && period) {
-    details = getWeatherMediaDetailsFrom(
+  $: debouncedHandleOnChangeQuery(query);
+
+  $: if (place) {
+    setQueryParams({
+      latitude: String(place.latitude),
+      longitude: String(place.longitude),
+    });
+  }
+
+  $: if (data && place && period && time) {
+    const details = getWeatherMediaDetailsFrom(
       data.current_weather.weathercode,
       period
     );
+
+    currentWeather = {
+      city: place.name,
+      description: details.description,
+      temperature: data.current_weather.temperature,
+      time,
+      icon: details.icon,
+      image: getRandomItem(details.images[period]),
+    };
   }
-
-  $: isMenuVisible = query !== "" && cities.length;
-
-  onMount(() => {
-    navigator.geolocation.getCurrentPosition(
-      async (data) => {
-        gaveAccessToGeolocation = true;
-
-        const { latitude, longitude } = data.coords;
-
-        const accessToken = "pk.7ad22ed537f71f7cf169ba5a23847c83";
-        const res = await fetch(
-          `https://eu1.locationiq.com/v1/reverse?key=${accessToken}&lat=${latitude}&lon=${longitude}&format=json`
-        );
-        const json = await res.json();
-
-        searchWeatherFor({
-          latitude: data.coords.latitude,
-          longitude: data.coords.longitude,
-          name: json.address.city,
-        });
-      },
-      () => {
-        gaveAccessToGeolocation = false;
-      }
-    );
-  });
-
-  const searchWeatherFor = async (city: City) => {
-    isSearchingForecast = true;
-    place = city;
-
-    const res = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${city.latitude}&longitude=${city.longitude}&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto`
-    );
-    const json = await res.json();
-
-    data = json;
-    query = "";
-    cities = [];
-    isSearchingForecast = false;
-  };
-
-  const handleOnChangeQuery = async () => {
-    if (!query) return;
-
-    const res = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?name=${query}`
-    );
-    const json = await res.json();
-
-    cities = json.results ?? [];
-  };
-  const debouncedHandleOnChangeQuery = debounce(handleOnChangeQuery);
 </script>
 
-{#if gaveAccessToGeolocation === null}
+{#if hasAccessToGeolocation === null}
   <div class="loading">
     <div class="loading__text">
       <LoadingIcon />
@@ -106,116 +147,46 @@
   </div>
 {/if}
 
-{#if data}
-  <main class="main">
+<main class="main">
+  {#if currentWeather}
     <div class="background">
       <img
-        src={getRandomItem(details.images[period])}
-        alt={details.description}
+        src={currentWeather.image}
+        alt={currentWeather.description}
         class="background__image"
       />
     </div>
+  {/if}
 
-    <div class="grid">
-      <WeatherDetails
-        name={place.name}
-        time={data.current_weather.time}
-        description={details.description}
-        icon={details.icon}
-        temperature={data.current_weather.temperature}
-      />
-
-      <aside class="sidebar">
-        <div>
-          <form class="sidebar__form form" on:submit|preventDefault>
-            <input
-              type="search"
-              name="query"
-              class="form__input"
-              placeholder="Search your city..."
-              bind:value={query}
-              on:input={debouncedHandleOnChangeQuery}
-            />
-
-            {#if isMenuVisible}
-              <div class="cities">
-                {#each cities as city}
-                  <button
-                    class="cities__option"
-                    type="button"
-                    on:click={() => searchWeatherFor(city)}
-                  >
-                    {#if city.admin1}
-                      {city.name}, {city.admin1}, {city.country}
-                    {:else}
-                      {city.name}, {city.country}
-                    {/if}
-                  </button>
-                {/each}
-              </div>
-            {/if}
-          </form>
-        </div>
-
-        <div>
-          {#if gaveAccessToGeolocation === false && !forecast}
-            <h2 class="sidebar__title">
-              Start searching your favorite cities 🥵🥶
-            </h2>
-          {/if}
-
-          {#if gaveAccessToGeolocation && isSearchingForecast}
-            <h2 class="sidebar__title">
-              Searching forecast for {place.name}...
-            </h2>
-          {/if}
-
-          {#if forecast && place}
-            <h2 class="sidebar__title">
-              Next {forecast.length} days for {place.name}
-            </h2>
-
-            {#each forecast as record}
-              {@const media = getWeatherMediaDetailsFrom(
-                record.weathercode,
-                period
-              )}
-
-              <h3 class="sidebar__list-title">
-                {formatDate(new Date(record.time), { dateStyle: "full" })}
-              </h3>
-
-              <dl class="sidebar__list">
-                <dt>Sunrise</dt>
-                <dd>
-                  {formatDate(new Date(record.sunrise), { timeStyle: "short" })}
-                </dd>
-
-                <dt>Sunset</dt>
-                <dd>
-                  {formatDate(new Date(record.sunset), { timeStyle: "short" })}
-                </dd>
-
-                <dt>Min</dt>
-                <dd>{Math.floor(record.temperature_2m_min)} ºC</dd>
-
-                <dt>Max</dt>
-                <dd>{Math.floor(record.temperature_2m_max)} ºC</dd>
-
-                <dt>
-                  {media.description}
-                </dt>
-                <dd>
-                  <Icon name={media.icon} size={22} />
-                </dd>
-              </dl>
-            {/each}
-          {/if}
-        </div>
-      </aside>
+  <div class="grid">
+    <div>
+      {#if currentWeather}
+        <WeatherDetails
+          name={currentWeather.city}
+          time={currentWeather.time}
+          description={currentWeather.description}
+          icon={currentWeather.icon}
+          temperature={currentWeather.temperature}
+        />
+      {/if}
     </div>
-  </main>
-{/if}
+
+    <div>
+      <Sidebar
+        {cities}
+        {forecast}
+        {hasAccessToGeolocation}
+        {period}
+        {place}
+        {isGettingCurrentLocation}
+        isSearching={isSearchingForecast}
+        onSelectCity={searchWeatherFor}
+        onCurrentLocationClick={setPositionFromCurrent}
+        bind:query
+      />
+    </div>
+  </div>
+</main>
 
 <style>
   .main {
@@ -254,7 +225,7 @@
 
   .grid {
     display: grid;
-    grid-template-columns: 3fr 1fr;
+    grid-template-columns: 2.5fr 1fr;
     height: 100%;
   }
 
@@ -291,84 +262,6 @@
     object-fit: cover;
   }
 
-  .sidebar {
-    display: grid;
-    grid-auto-flow: row;
-    grid-auto-rows: min-content;
-    row-gap: 60px;
-    max-height: 100%;
-    overflow: overlay;
-    padding: 60px;
-    backdrop-filter: blur(30px) brightness(0.7);
-  }
-
-  .sidebar__title {
-    margin-bottom: 32px;
-
-    font-size: 28px;
-  }
-
-  .sidebar__list {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    row-gap: 4px;
-  }
-
-  .sidebar__list:not(:last-child) {
-    margin-bottom: 32px;
-  }
-
-  .sidebar__list :nth-child(even) {
-    text-align: right;
-  }
-
-  .sidebar__form {
-    position: relative;
-  }
-
-  .form__input {
-    width: 100%;
-    padding: 10px 0;
-
-    font-size: 18px;
-
-    background: none;
-    border: 0;
-    border-bottom: 3px solid var(--light);
-    outline: 0;
-  }
-
-  .form__input::placeholder {
-    color: rgba(255, 255, 255, 0.5);
-  }
-
-  .cities {
-    position: absolute;
-    top: 44px;
-    left: 0;
-    right: 0;
-    max-height: 300px;
-    overflow: overlay;
-  }
-
-  .cities__option {
-    display: block;
-    width: 100%;
-    padding: 14px 12px;
-
-    text-align: left;
-    color: rgba(0, 0, 0, 0.8);
-    font-size: 16px;
-
-    cursor: pointer;
-    border: 0;
-    background: var(--light);
-  }
-
-  .cities__option:hover {
-    background: #efefef;
-  }
-
   @media screen and (max-width: 1024px) {
     .main {
       width: auto;
@@ -380,14 +273,18 @@
       display: block;
     }
 
-    .sidebar {
-      max-height: none;
-      overflow: visible;
-      padding: 40px;
+    .background {
+      position: fixed;
     }
 
-    .cities {
-      max-height: 200px;
+    .background::before {
+      top: 0;
+
+      background-image: linear-gradient(
+        to top,
+        rgba(0, 0, 0, 0.3) 0,
+        rgba(0, 0, 0, 0.3) 100%
+      );
     }
   }
 </style>
