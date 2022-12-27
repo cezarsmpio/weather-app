@@ -9,7 +9,7 @@
 Create an account [LocationIQ](https://locationiq.com/) to get an access token and add to your `.env` file like this:
 
 ```
-LOCATION_IQ_ACCESS_TOKEN=token_from_location_iq
+VITE_LOCATION_IQ_ACCESS_TOKEN=token_from_location_iq
 ```
 
 Then:

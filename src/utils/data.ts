@@ -4,7 +4,7 @@ export const getAddressFor = async (
   latitude: number,
   longitude: number
 ): Promise<Location> => {
-  const accessToken = import.meta.env.LOCATION_IQ_ACCESS_TOKEN;
+  const accessToken = import.meta.env.VITE_LOCATION_IQ_ACCESS_TOKEN;
   const res = await fetch(
     `https://eu1.locationiq.com/v1/reverse?key=${accessToken}&lat=${latitude}&lon=${longitude}&format=json`
   );
