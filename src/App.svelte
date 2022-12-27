@@ -11,7 +11,12 @@
     TimePeriod,
   } from "./types";
   import { combine, getRandomItem } from "./utils/array";
-  import { getAddressFor, getGeocodingFor, getWeatherFor } from "./utils/data";
+  import {
+    getAddressFor,
+    getCityName,
+    getGeocodingFor,
+    getWeatherFor,
+  } from "./utils/data";
   import { debounce } from "./utils/debounce";
   import { getTimePeriod, getWeatherMediaDetailsFrom } from "./utils/details";
   import { getCurrentPosition } from "./utils/location";
@@ -42,7 +47,7 @@
       searchWeatherFor({
         latitude: +latitude,
         longitude: +longitude,
-        name: address.city ?? address.town ?? address.state,
+        name: getCityName(address),
       });
     } else {
       setPositionFromCurrent();
@@ -63,7 +68,7 @@
       searchWeatherFor({
         latitude,
         longitude,
-        name: address.city ?? address.town ?? address.state,
+        name: getCityName(address),
       });
     } catch {
       // TODO: Notify the user

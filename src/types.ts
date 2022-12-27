@@ -79,14 +79,21 @@ export type Location = {
 
 export type Address = {
   bridge?: string;
-  road?: string;
   suburb?: string;
   borough?: string;
   city?: string;
   town?: string;
+  state?: string;
+  house_number?: string;
+  road?: string;
+  neighbourhood?: string;
+  farm?: string;
+  village?: string;
+  municipality?: string;
+  county?: string;
+  postcode?: string;
   country?: string;
   country_code?: string;
-  state?: string;
 };
 
 export type Geocoding = {

@@ -1,4 +1,4 @@
-import type { City, Geocoding, Location, OpenWeather } from "../types";
+import type { City, Geocoding, Location, OpenWeather, Address } from "../types";
 
 export const getAddressFor = async (
   latitude: number,
@@ -29,4 +29,17 @@ export const getWeatherFor = async (city: City): Promise<OpenWeather> => {
   const json = await res.json();
 
   return json;
+};
+
+export const getCityName = (address: Address) => {
+  return (
+    address.city ??
+    address.town ??
+    address.village ??
+    address.farm ??
+    address.county ??
+    address.state ??
+    address.country ??
+    "N/A"
+  );
 };
